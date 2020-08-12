@@ -8,18 +8,90 @@ output:
 
 ## Loading and preprocessing the data
 
+```{r load data}
+download.file("https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip", destfile = "activity.zip", mode="wb")
 
+unzip("activity.zip")
+data <- read.csv("activity.csv", header = TRUE)
+head(data)
+```
 
 ## What is mean total number of steps taken per day?
 
+```{r}
+library(magrittr)
+library(dplyr)
 
+data.by.date <- data %>%
+  select(date, steps) %>%
+  group_by(date) %>%
+  summarize(total.steps = sum(steps)) %>%
+  na.omit()
+
+hist(data.by.date$total.steps, xlab = 'Total daily Steps', main = 'Total Steps By Day', breaks = 20)
+
+mean(data.by.date$total.steps)
+median(data.by.date$total.steps)
+```
 
 ## What is the average daily activity pattern?
 
-
+```{r}
+library(ggplot2)
+data.by.interval <- data %>%
+  select(interval, steps) %>%
+  na.omit() %>%
+  group_by(interval) %>%
+  summarize(total.steps = mean(steps))
+ggplot(data.by.interval, aes(x = interval, y = total.steps)) + geom_line()
+```
+Interval with max number of steps
+```{r}
+data.by.interval[which(data.by.interval$total.steps == max(data.by.interval$total.steps)), ]
+```
 
 ## Imputing missing values
 
+```{r}
+missing.values <- sum(is.na(data))
+missing.values
+```
+NA values replaced with mean for 5-minute interval
+```{r}
+library(magrittr)
+library(dplyr)
 
+replacewithmean <- function(x) replace(x, is.na(x), mean(x, na.rm = TRUE))
+mean.data <- data %>%
+  group_by(interval) %>%
+  mutate(steps= replacewithmean(steps))
+```
+Making Histogram and calculating new mean and median
+```{r}
+alldata.by.day <- aggregate(mean.data$steps, by = list(mean.data$date), sum)
+
+names(alldata.by.day)[1] ="date"
+names(alldata.by.day)[2] ="totalsteps"
+
+summary(alldata.by.day)
+
+hist(alldata.by.day$total.steps, xlab = "Steps", ylab = "Frequency", main = "Total Daily Steps", breaks = 20)
+
+mean(alldata.by.day$total.steps)
+median(alldata.by.day$total.steps)
+```
+Mean stayed the same, while median changed. Imputing missing data increased median estimate. This is because NA values, usually set to 0, are replaced with numbers greater than 0.
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+```{r}
+mean.data$date <- as.Date(mean.data$date)
+mean.data$weekday <- weekdays(mean.data$date)
+mean.data$weekend <- ifelse(mean.data$weekday == "Saturday" | mean.data$weekday == "Sunday", "Weekend", "Weekday" )
+
+library(ggplot2)
+mean.data.weekend.weekday <- aggregate(mean.data$steps , by = list(mean.data$weekend, mean.data$interval), na.omit(mean))
+names(mean.data.weekend.weekday) <- c("weekend", "interval", "steps")
+
+ggplot(mean.data.weekend.weekday, aes(x = interval, y = steps, color = weekend)) + geom_line() + facet_grid(weekend ~.) + xlab("Interval") + ylab("Mean Steps") + ggtitle("Comparison of Average Number of Steps in Each Interval")
+```
